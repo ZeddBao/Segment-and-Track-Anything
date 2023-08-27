@@ -49,6 +49,7 @@ seg_tracker = SegTracker(segtracker_args, sam_args, aot_args)
 grounding_caption = tmp_caption = "phone.tissue"
 box_threshold = 0.5
 text_threshold = 0.5
+visualize = False
 
 frame_idx = 0
 
@@ -68,12 +69,14 @@ with torch.cuda.amp.autocast():
             pred_mask, _, annotated_masks = seg_tracker.detect_and_seg(frame, grounding_caption, box_threshold, text_threshold)
             for mask in annotated_masks:
                 mask['mask'], mask['id'] = extract_mask(pred_mask, mask['bbox'])
-                frame = draw_mask(frame, mask['mask'])
+                if visualize:
+                    frame = draw_mask(frame, mask['mask'])
             # Reset the first frame's mask
             seg_tracker.restart_tracker()
             seg_tracker.add_reference(frame, pred_mask, frame_idx)
             seg_tracker.first_frame_mask = pred_mask
-            annotated_frame = annotate(frame, annotated_masks)
+            if visualize:
+                annotated_frame = annotate(frame, annotated_masks)
         elif (frame_idx % seg_tracker.sam_gap) == 0:
             seg_mask, _, annotated_masks = seg_tracker.detect_and_seg(frame, grounding_caption, box_threshold, text_threshold)
             torch.cuda.empty_cache()
@@ -84,7 +87,8 @@ with torch.cuda.amp.autocast():
             pred_mask = track_mask + new_obj_mask
             for mask in annotated_masks:
                 mask['mask'], mask['id'] = extract_mask(pred_mask, mask['bbox'])
-                frame = draw_mask(frame, mask['mask'])
+                if visualize:
+                    frame = draw_mask(frame, mask['mask'])
             seg_tracker.add_reference(frame, pred_mask)
             annotated_frame = annotate(frame, annotated_masks)
         else:
@@ -92,14 +96,17 @@ with torch.cuda.amp.autocast():
             for mask in annotated_masks:
                 mask['mask'] = pred_mask == mask['id']
                 mask['bbox'] = get_bbox_from_mask(mask['mask'])
-                frame = draw_mask(frame, mask['mask'])
-            annotated_frame = annotate(frame, annotated_masks)
+                if visualize:
+                    frame = draw_mask(frame, mask['mask'])
+            if visualize:
+                annotated_frame = annotate(frame, annotated_masks)
         
         frame_idx += 1
-        masked_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR)
+        if visualize:
+            masked_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR)
+            cv2.imshow('frame', masked_frame)
         torch.cuda.empty_cache()
         gc.collect()
-        cv2.imshow('frame', masked_frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
         
