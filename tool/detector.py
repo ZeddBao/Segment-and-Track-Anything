@@ -74,7 +74,8 @@ class Detector:
         
         # transfer boxes to sam-format 
         transfered_boxes = self.transfer_boxes_format(boxes, re_height, re_width)
-        return annotated_frame, transfered_boxes
+        annotated_boxes = list(zip(transfered_boxes, logits, phrases))
+        return annotated_frame, transfered_boxes, annotated_boxes
 
 if __name__ == "__main__":
     detector = Detector("cuda")
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     box_threshold = 0.25
     text_threshold = 0.25
 
-    annotated_frame, boxes = detector.run_grounding(origin_frame, grounding_caption, box_threshold, text_threshold)
+    annotated_frame, boxes, _ = detector.run_grounding(origin_frame, grounding_caption, box_threshold, text_threshold)
     cv2.imwrite('./debug/x.png', annotated_frame)
 
     for i in range(len(boxes)):
