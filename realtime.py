@@ -17,6 +17,7 @@ def annotate(frame, annotated_masks):
         x1, y1, x2, y2 = mask['bbox']
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
         cv2.putText(annotated_frame, f"{mask['id']} {mask['phrase']} {mask['logit']:.2f}", (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        annotated_frame = draw_mask(frame, mask['mask'])
     return annotated_frame
 
 def extract_mask(mask, bbox):
@@ -68,15 +69,11 @@ with torch.cuda.amp.autocast():
         if frame_idx == 0:
             pred_mask, _, annotated_masks = seg_tracker.detect_and_seg(frame, grounding_caption, box_threshold, text_threshold)
             for mask in annotated_masks:
-                mask['mask'], mask['id'] = extract_mask(pred_mask, mask['bbox'])
-                if visualize:
-                    frame = draw_mask(frame, mask['mask'])
+                mask['mask'], mask['id'] = extract_mask(pred_mask, mask['bbox'])        
             # Reset the first frame's mask
             seg_tracker.restart_tracker()
             seg_tracker.add_reference(frame, pred_mask, frame_idx)
             seg_tracker.first_frame_mask = pred_mask
-            if visualize:
-                annotated_frame = annotate(frame, annotated_masks)
         elif (frame_idx % seg_tracker.sam_gap) == 0:
             seg_mask, _, annotated_masks = seg_tracker.detect_and_seg(frame, grounding_caption, box_threshold, text_threshold)
             torch.cuda.empty_cache()
@@ -87,22 +84,16 @@ with torch.cuda.amp.autocast():
             pred_mask = track_mask + new_obj_mask
             for mask in annotated_masks:
                 mask['mask'], mask['id'] = extract_mask(pred_mask, mask['bbox'])
-                if visualize:
-                    frame = draw_mask(frame, mask['mask'])
             seg_tracker.add_reference(frame, pred_mask)
-            annotated_frame = annotate(frame, annotated_masks)
         else:
             pred_mask = track_mask = seg_tracker.track(frame, update_memory=True)
             for mask in annotated_masks:
                 mask['mask'] = pred_mask == mask['id']
-                mask['bbox'] = get_bbox_from_mask(mask['mask'])
-                if visualize:
-                    frame = draw_mask(frame, mask['mask'])
-            if visualize:
-                annotated_frame = annotate(frame, annotated_masks)
+                mask['bbox'] = get_bbox_from_mask(mask['mask'])                
         
         frame_idx += 1
         if visualize:
+            annotated_frame = annotate(frame, annotated_masks)
             masked_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR)
             cv2.imshow('frame', masked_frame)
         torch.cuda.empty_cache()
